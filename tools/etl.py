@@ -3,8 +3,16 @@ import sqlite3 as sql
 import pandas as pd
 
 # Importing Local File
-import fetch
+from tools import fetch
 
+import os
+
+DB_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "data",
+    "data.db"
+)
 
 def cleaning(df):
     """
@@ -13,12 +21,12 @@ def cleaning(df):
     df = df.copy()
 
     col_name = {
-        '0' : 'timestamp',
-        '1' : 'open',
-        '2' : 'high',
-        '3' : 'low',
-        '4' : 'close',
-        '5' : 'volume',
+        0 : 'timestamp',
+        1 : 'open',
+        2 : 'high',
+        3 : 'low',
+        4 : 'close',
+        5 : 'volume',
     }
 
     # Renaming each columns that we only need
@@ -31,11 +39,11 @@ def cleaning(df):
         'high',
         'low',
         'close',
-        'volume'
+        'volume',
+        'symbol'
     ]]
 
     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df = df.sort_values("timestamp")
 
     return df
 
@@ -43,66 +51,50 @@ def cleaning(df):
 
 def to_database(df):
     # Connecting the database
-    with sql.connect('../data/data.db') as conn:
-        conn.cursor()
 
-    df.to_sql(
-        name="bronze_candles",
-        con=conn,
-        if_exists="append",
-        index=False,
+    import os
+
+    DB_PATH = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "data",
+        "data.db"
     )
 
-    conn.close()
+    with sql.connect(DB_PATH) as conn:
+        df.to_sql(
+            name="bronze_candles",
+            con=conn,
+            if_exists="append",
+            index=False,
+        )
 
-def incremental_update(df):
+def incremental_update(symbols, interval, end=None):
     """
     Updating the start time parameter for fetching data
     """
-    with sql.connect('../data/data.db') as conn:
-        conn.cursor()
 
-    # Take timestamp data from database
-    (conn.execute(
-    """
-    SELECT timestamp from bronze_candles
-        
-    """))
+    with sql.connect(DB_PATH) as conn:
+        last_timestamp = conn.execute(
+            "SELECT MAX(timestamp) FROM bronze_candles"
+        ).fetchone()[0]
 
+    start = pd.Timestamp(last_timestamp).value // 1_000_000 + 1
 
-def backfill(symbols, interval):
-        """
-        Backfill historical data
-        """
-        INTERVAL_MS = {
-            "1m": 60_000,
-            "5m": 300_000,
-            "15m": 900_000,
-            "1h": 3_600_000,
-            "4h": 14_400_000,
-            "1d": 86_400_000,
-        }
-        end = None
+    raw_json = fetch.fetch(
+        symbols=symbols,
+        interval=interval,
+        start=start,
+        end=end,
+    )
 
-        # Loop
-        while True:
+    dfs = {}
+    for symbol in symbols:
+        if len(raw_json[symbol]) == 0:
+            continue
+        df = fetch.json_to_df(raw_json[symbol], symbol)
+        df = cleaning(df)
+        to_database(df)
+        dfs[symbol] = df
 
-            # Fetch
-            raw_json = fetch.fetch(
-                symbols=symbols,
-                interval=interval,
-                end=end,
-            )
-
-            # Checking if there's no more data
-            if len(raw_json[symbols[0]]) == 0:
-                break
-
-            # Save first_open of all symbols
-            first_opens = []
-
-        for symbol in symbols:
-            df = fetch.json_to_df(raw_json[symbol], symbol)
-            df = cleaning(df) # is this count as variable abuse?
-
-
+    return dfs

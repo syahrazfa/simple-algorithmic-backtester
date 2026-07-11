@@ -39,3 +39,13 @@ def json_to_df(data, symbol):
     df = pd.DataFrame(data)
     df["symbol"] = symbol
     return df
+#
+# if __name__ == '__main__':
+#
+#     start = pd.Timestamp("2019-04-01").value // 1_000_000
+#     end = pd.Timestamp("2019-04-02").value // 1_000_000
+#
+#     symbols = ['BTCUSDT']
+#
+#     df = json_to_df(fetch(symbols=symbols, interval='1h', start=start, end=end), symbol="BTCUSDT")
+#     print(df.head())
