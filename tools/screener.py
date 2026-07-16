@@ -1,7 +1,7 @@
 # Library
 import matplotlib
 matplotlib.use('TkAgg')
-
+from mpl_toolkits.mplot3d import Axes3D
 import sqlite3 as sql
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -118,7 +118,27 @@ def vsa(symbols, rolls=20):
     for symbol in symbols:
         df = get_data(symbol)
 
+        df['spread'] = df['high'] - df['low']
+        df['close_loc'] = (df['close'] - df['low']) / df['spread']
+        df['direction'] = (2 * df['close_loc']) - 1
 
+        # Z-score
+        df['spread_z'] = (df['spread'] - df['spread'].rolling(rolls).mean()) / df['spread'].rolling(rolls).std()
+        df['volume_z'] = (df['volume'] - df['volume'].rolling(rolls).mean()) / df['volume'].rolling(rolls).std()
+
+        # Vector Decomposition
+        df['intensity'] = np.sqrt(df['spread_z']**2 + df['volume_z']**2)
+        df['health'] = (df['spread_z'] + df['volume_z']) / np.sqrt(2)
+        df['churn'] = (df['volume_z'] - df['spread_z']) / np.sqrt(2)
+
+        # Smoothed Momentum
+        df['health_smooth'] = df['health'].ewm(span=rolls, adjust=False).mean()
+        df['trend_direction'] = np.sign(df['close'].ewm(span=rolls * 2, adjust=False).mean().diff())
+        df['vsa_momentum'] = df['health_smooth'] * df['trend_direction']
+
+        result[symbol] = df
+
+    return result
 
 symbol = "BTCUSDT"
 fast, medium, slow = 20, 50, 200
@@ -126,6 +146,7 @@ fast, medium, slow = 20, 50, 200
 df_sma = sma_signals([symbol])[symbol]
 df_rsi = rsi_signals([symbol])[symbol]
 df_bb = bb_signals([symbol])[symbol]
+df_vsa = vsa([symbol])[symbol]
 
 golden = df_sma[df_sma['cross_medium_slow'] == 1]
 death = df_sma[df_sma['cross_medium_slow'] == -1]
@@ -164,4 +185,44 @@ plt.xlabel('Date')
 plt.legend()
 plt.title(f'{symbol} - RSI')
 plt.tight_layout()
+
+
+# VSA Visualisation - 3D Vector Space
+d = df_vsa.dropna(subset=['spread_z', 'volume_z', 'close_loc'])
+
+fig = plt.figure(figsize=(9, 8))
+ax = fig.add_subplot(111, projection='3d')
+sc = ax.scatter(d['spread_z'], d['volume_z'], d['close_loc'],
+                 c=d['close_loc'], cmap='RdYlGn', s=14, alpha=0.7)
+ax.set_xlabel('spread_z (result)')
+ax.set_ylabel('volume_z (effort)')
+ax.set_zlabel('close_loc (0=low, 1=high)')
+ax.set_title(f'{symbol} - VSA Vector Space')
+fig.colorbar(sc, label='close_loc', shrink=0.6)
+plt.tight_layout()
+
+# VSA Visualisation - Last N bars as vectors from origin
+n = 60
+d_recent = df_vsa.dropna(subset=['spread_z', 'volume_z', 'close_loc']).tail(n)
+origin = np.zeros(len(d_recent))
+colors = plt.cm.RdYlGn(d_recent['close_loc'])
+
+fig = plt.figure(figsize=(9, 8))
+ax = fig.add_subplot(111, projection='3d')
+ax.quiver(origin, origin, origin,
+          d_recent['spread_z'], d_recent['volume_z'], d_recent['close_loc'],
+          color=colors, arrow_length_ratio=0.08, linewidth=1)
+
+# Force limits to actually contain the vectors
+ax.set_xlim(d_recent['spread_z'].min(), d_recent['spread_z'].max())
+ax.set_ylim(d_recent['volume_z'].min(), d_recent['volume_z'].max())
+ax.set_zlim(0, 1)  # close_loc is always 0-1 by definition
+
+ax.set_xlabel('spread_z (result)')
+ax.set_ylabel('volume_z (effort)')
+ax.set_zlabel('close_loc')
+ax.set_title(f'{symbol} - Last {n} Bars as VSA Vectors')
+plt.tight_layout()
+
+# Show all plot
 plt.show()
