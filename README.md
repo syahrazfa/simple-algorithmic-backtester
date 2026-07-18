@@ -105,7 +105,7 @@ python backtest.py   # runs the layered strategy and prints performance stats
 <!-- LICENSE -->
 ## License
 
-Distributed under the Unlicense License. See `LICENSE.txt` for more information.
+Distributed under the MIT License. See `LICENSE.txt` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -113,7 +113,7 @@ Distributed under the Unlicense License. See `LICENSE.txt` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Syahraz Fiqat Alamsyah - [@junsiee_](https://twitter.com/junsiee_) - syahrazfa@gmail.com
+Syahraz Fiqar Alamsyah - [@junsiee_](https://twitter.com/junsiee_) - syahrazfa@gmail.com
 
 Project Link: [https://github.com/syahrazfa/simple-algorithmic-backtester](https://github.com/syahrazfa/simple-algorithmic-backtester)
 
